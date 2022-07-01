@@ -2,15 +2,53 @@
 
 @section('extrameta')
 <title>{{ $restorant->name }}</title>
-<meta property="og:image" itemprop="image" content="{{ $restorant->logom }}">
+<meta property="og:image" content="{{ $restorant->logom }}">
 <meta property="og:image:type" content="image/png">
 <meta property="og:image:width" content="590">
 <meta property="og:image:height" content="400">
 <meta name="og:title" property="og:title" content="{{ $restorant->name }}">
 <meta name="description" content="{{ $restorant->description }}">
-@if (\Akaunting\Module\Facade::has('googleanalytics'))
-    @include('googleanalytics::index') 
-@endif
+@endsection
+
+@section('css')
+
+<style>
+    .sub-category-item {
+        margin-bottom: 45px;
+    }
+
+    .sub-category-item .strip {
+        padding: 20px;
+        box-shadow: rgba(99, 99, 99, 0.2) 0px 2px 8px 0px;
+    }
+
+    .sub-category-title {
+        font-size: 23px;
+        font-weight: bold;
+        color: #353535;
+        margin-bottom: 20px !important;
+    }
+
+    .sub-categories-items-wrp .loading-spin {
+        margin: 20px 0;
+        vertical-align: center;
+        text-align: center;
+    }
+
+    .sub-categories-items-wrp .loading-spin i{
+        font-size: 35px;
+        color: #6E69E4;
+    }
+    .category_bradecumn {
+        text-align: right;
+        margin-bottom: 10px;
+    }
+
+    .getChildrenItems {
+        cursor: pointer;
+    }
+</style>
+    
 @endsection
 
 @section('content')
@@ -21,7 +59,6 @@
         return preg_replace('/[^A-Za-z0-9\-]/', '', $string); // Removes special chars.
      }
 ?>
-
 @include('restorants.partials.modals')
 
     <section class="section-profile-cover section-shaped grayscale-05 d-none d-md-none d-lg-block d-lx-block">
@@ -98,11 +135,7 @@
                         @endif
                     @endforeach
                 </ul>
-
-                
             </nav>
-
-            
             @endif
 
             
@@ -112,47 +145,78 @@
             @foreach ( $restorant->categories as $key => $category)
                 @if(!$category->aitems->isEmpty())
                 <div id="{{ clean(str_replace(' ', '', strtolower($category->name)).strval($key)) }}" class="{{ clean(str_replace(' ', '', strtolower($category->name)).strval($key)) }}">
-                    <h1>{{ $category->name }}</h1><br />
+                    <h1>{{ $category->name }}</h1>
                 </div>
                 @endif
-                <div class="row {{ clean(str_replace(' ', '', strtolower($category->name)).strval($key)) }}">
-                    @foreach ($category->aitems as $item)
-                        <div class="col-xl-3 col-lg-6 col-md-6 col-sm-6">
-                            <div class="strip">
-                                @if(!empty($item->image))
-                                <figure>
-                                    <a onClick="setCurrentItem({{ $item->id }})" href="javascript:void(0)"><img src="{{ $item->logom }}" loading="lazy" data-src="{{ config('global.restorant_details_image') }}" class="img-fluid lazy" alt=""></a>
-                                </figure>
-                                @endif
-                                <div class="res_title"><b><a onClick="setCurrentItem({{ $item->id }})" href="javascript:void(0)">{{ $item->name }}</a></b></div>
-                                <div class="res_description">{{ $item->short_description}}</div>
-                                <div class="row">
-                                    <div class="col-6">
-                                        <div class="res_mimimum">
-                                            @if ($item->discounted_price>0)
-                                                <span class="text-muted" style="text-decoration: line-through;">@money($item->discounted_price, config('settings.cashier_currency'),config('settings.do_convertion'))</span>
-                                            @endif
-                                            @money($item->price, config('settings.cashier_currency'),config('settings.do_convertion'))
-                                        </div>
-                                    </div>
-                                    <div class="col-6">
-                                        <div class="allergens" style="text-align: right;">
-                                            @foreach ($item->allergens as $allergen)
-                                             <div class='allergen' data-toggle="tooltip" data-placement="bottom" title="{{$allergen->title}}" >
-                                                 <img  src="{{$allergen->image_link}}" />
-                                             </div>
-                                            @endforeach
-                                             
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                
-                           
+
+                <div class="sub-categories-items-wrp">
+                    <div class="sub-categories-wrp {{ clean(str_replace(' ', '', strtolower($category->name)).strval($key)) }}">
+
+                        @if ($sub_categories->where('category_id',$category->id)->count() > 0)
+                            <div class="sub-category-title mb-2">
+                                {{ __("Sub Categories: ") }}
                             </div>
+                        @endif
+                        <div class="row">
+                            @if ($sub_categories->where('category_id',$category->id)->count() > 0)
+                                @foreach ($sub_categories as $singleItem)
+                                    @if ($category->id == $singleItem->category_id)
+                                        <div class="col-xl-3 col-lg-6 col-md-6 col-sm-6 sub-category-item">
+                                            <div class="strip h-100 getChildrenItems" data-category="{{ $category->id }}" data-parent="{{ $singleItem->id }}" data-cat_name="{{ $category->name }}" data-key="{{ $key }}">
+                                                @if(!empty($singleItem->image))
+                                                <figure>
+                                                    <a href="javascript:void(0)"><img src="{{ $singleItem->logom }}" loading="lazy" class="img-fluid lazy" alt=""></a>
+                                                </figure>
+                                                @endif
+                                                <div class="res_title"><b><a href="javascript:void(0)">{{ $singleItem->sub_category_name }}</a></b></div>
+                                                <div class="res_description">{{ $singleItem->sub_category_description}}</div>
+                                            </div>
+                                        </div>
+                                    @endif
+                                @endforeach
+                            @endif
                         </div>
-                    @endforeach
+                    </div>
+
+                    <div class="category-wrp {{ clean(str_replace(' ', '', strtolower($category->name)).strval($key)) }}">
+                        @if ($category->aitems->where('category_id',$category->id)->count() > 0)
+                            <div class="sub-category-title mb-2 text-right">
+                                {{ __("Items: ") }}
+                            </div>
+                        @endif
+                        <div class="row">
+                            @foreach ($category->aitems as $item)
+                                @if ($item->category_type == 1)
+                                    <div class="col-xl-3 col-lg-6 col-md-6 col-sm-6">
+                                        <div class="strip">
+                                            @if(!empty($item->image))
+                                            <figure>
+                                                <a onClick="setCurrentItem({{ $item->id }})" href="javascript:void(0)"><img src="{{ $item->logom }}" loading="lazy" data-src="{{ config('global.restorant_details_image') }}" class="img-fluid lazy" alt=""></a>
+                                            </figure>
+                                            @endif
+                                            <div class="res_title"><b><a onClick="setCurrentItem({{ $item->id }})" href="javascript:void(0)">{{ $item->name }}</a></b></div>
+                                            <div class="res_description">{{ $item->short_description}}</div>
+                                            <div class="row">
+                                                <div class="col-4"><div class="res_mimimum">@money($item->price, config('settings.cashier_currency'),config('settings.do_convertion'))</div></div>
+                                                <div class="col-8">
+                                                    <div class="allergens" style="text-align: right;">
+                                                        @foreach ($item->allergens as $allergen)
+                                                        <div class='allergen' data-toggle="tooltip" data-placement="bottom" title="{{$allergen->title}}" >
+                                                            <img  src="{{$allergen->image_link}}" />
+                                                        </div>
+                                                        @endforeach
+                                                        
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                @endif
+                            @endforeach
+                        </div>
+                    </div>
                 </div>
+
             @endforeach
             @else
                 <div class="row">
@@ -170,8 +234,8 @@
                 
                 <!-- Check if there is value -->
                 @if (strlen($restorant->getConfig('impressum_value',''))>5)
-                    <h3>{{  __($restorant->getConfig('impressum_title','')) }}</h3>
-                    <?php echo __($restorant->getConfig('impressum_value','')); ?>
+                    <h3>{{$restorant->getConfig('impressum_title','')}}</h3>
+                    <?php echo $restorant->getConfig('impressum_value',''); ?>
                 @endif
             @endif
             
@@ -265,6 +329,58 @@
     @if (isset($showGoogleTranslate)&&$showGoogleTranslate&&!$showLanguagesSelector)
         @include('googletranslate::scripts')
     @endif
+
+
+    <script>
+        $(document).ready(function(){
+            $(document).on('click','.getChildrenItems',function(){
+                var category = $(this).attr('data-category');
+                var parent = $(this).attr('data-parent');
+                var category_name = $(this).attr('data-cat_name');
+                var loop_key = $(this).attr('data-key');
+
+                var back_btn = '';
+                if($(this).attr('data-back')) {
+                    var back_btn = 'clicked';
+                }else {
+                    if(category == undefined || parent == undefined || category == "" || parent == "" ) {
+                        alert('Something Worng! Please try again.');
+                        return false;
+                    }
+                }
+
+                var category_item_wrp = $(this).parents('.sub-categories-items-wrp');
+                category_item_wrp.css('height','500px');
+                category_item_wrp.fadeOut();
+
+                var loadingAnimation = `<div class="loading-spin">
+                                        <i class="fa fa-spinner fa-pulse fa-3x fa-fw"></i>
+                                    </div>`;
+                category_item_wrp.html(loadingAnimation);
+
+                $.ajaxSetup({
+                    headers: {
+                        'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+                    }
+                });
+
+                $.post("/sub-category/font-end", {category: category,parent:parent,back_click:back_btn,category_name:category_name,loop_key:loop_key}, function(data,status){
+                    if(status == "success") {
+                        if(data != 'error') {
+                            category_item_wrp.fadeIn();
+                            category_item_wrp.html(data);
+                            category_item_wrp.css('height','auto');
+                            
+                        }else {
+                            category_item_wrp.html("<div class='text-danger text-center mt-3'>Something Worng! Please try again.</div>");
+                        }
+                    }else {
+                        alert('Something Worng! Please Try Again.')
+                    }
+                });
+            });
+        });
+    </script>
 @endsection
 
 @if (isset($showGoogleTranslate)&&$showGoogleTranslate&&!$showLanguagesSelector)
