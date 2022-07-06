@@ -58,6 +58,7 @@ sail artisan translation:sync-missing-translation-keys
 [.env](https://paste.laravel.io/2fe670c7-f66b-443e-9e79-b5fa6618360b)
 
 
-
+## Version History
 v1.1.0 is the base
+
 v1.2.0 is with video menus added
