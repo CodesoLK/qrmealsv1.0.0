@@ -195,9 +195,6 @@ class FrontEndController extends Controller
             }else if(config('settings.is_agris_mode')){
                 //Agris Mode
                 return $this->agrisMode();
-            }else if(config('app.issd')){
-                //Social Drive Mode
-                return $this->taxiMode();
             }else{
                 //Default QR
                 return $this->qrsaasMode();
@@ -310,7 +307,7 @@ class FrontEndController extends Controller
                 ]);
             }
 
-            $featured_vendors=Restorant::where('active',1)->where('is_featured',1)->get()->shuffle();
+            $featured_vendors=Restorant::where('active',1)->where('is_featured',0)->get()->shuffle();
            
 
             $response = new \Illuminate\Http\Response(view('qrsaas.'.config('settings.qr_landing'), [
@@ -343,19 +340,13 @@ class FrontEndController extends Controller
 
         //Set the cookie of the last entered address
         $lastaddress = Cookie::get('lastaddress');
-
-        $langs=$this->handleLangs();
         $response = new \Illuminate\Http\Response(view('welcome', [
             'sections' =>[['super_title'=>__('Cities'), 'title'=>__('Find us in these cities and many more!'), 'cities'=>City::where('id', '>', 0)->get()]],
             'lastaddress'=>$lastaddress,
-            'availableLanguages'=>$langs[0],
-            'locale'=>$langs[1]
         ]));
         if (\Request::has('location') && strlen(\Request::input('location')) > 1) {
             $response->withCookie(cookie('lastaddress', \Request::input('location'), 120));
         }
-        $response->withCookie(cookie('lang', $langs[1], 120));
-
 
         return $response;
     }
@@ -398,7 +389,7 @@ class FrontEndController extends Controller
             $testimonials = Testimonials::where('post_type', 'testimonial')->get();
             $processes = Process::where('post_type', 'process')->get();
 
-            $featured_vendors=Restorant::where('active',1)->where('is_featured',1)->get()->shuffle();
+            $featured_vendors=Restorant::where('active',1)->where('is_featured',0)->get()->shuffle();
             $demoLink="#";
             $demoVendor=Restorant::where('subdomain',config('settings.demo_restaurant_slug'))->first();
             if($demoVendor){
@@ -525,7 +516,6 @@ class FrontEndController extends Controller
                 'pages' => Pages::where('showAsLink', 1)->get(),
                 'featured_vendors'=>Restorant::where('active',1)->where('is_featured',0)->get()->shuffle(),
                 'features' => $features,
-                'faqs' =>  Process::where('post_type', 'faq')->get(),
                 'testimonials' => $testimonials,
                 'processes' => $processes
             ]));
@@ -537,65 +527,8 @@ class FrontEndController extends Controller
         }
     }
 
-    /**
-     * 7. Taxi Mode.
-     */
-    public function taxiMode(){
-        if (config('settings.disable_landing')) {
-            //With disabled landing
-            return redirect()->route('login');
-        } else {
-            //Normal, with landing
-            $plans = config('settings.forceUserToPay',false)?Plans::where('id','!=',intval(config('settings.free_pricing_id')))->get()->toArray():Plans::get()->toArray();
-            $colCounter = [12, 6, 4, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4];
 
-            $availableLanguagesENV = config('settings.front_languages');
-            $exploded = explode(',', $availableLanguagesENV);
-            $availableLanguages = [];
-            for ($i = 0; $i < count($exploded); $i += 2) {
-                $availableLanguages[$exploded[$i]] = $exploded[$i + 1];
-            }
-
-            $locale = Cookie::get('lang') ? Cookie::get('lang') : config('settings.app_locale');
-            $route = Route::current();
-            $name = Route::currentRouteName();
-            $query = 'lang.';
-            if (substr($name, 0, strlen($query)) === $query) {
-                //this is language route
-                $exploded = explode('.', $name);
-                $lang = strtoupper($exploded[1]);
-                $locale = $lang;
-            }
-            App::setLocale(strtolower($locale));
-            session(['applocale_change' => strtolower($locale)]);
-
-            //Landing page content
-            $features = Features::where('post_type', 'feature')->get();
-            $testimonials = Testimonials::where('post_type', 'testimonial')->get();
-            $processes = Process::where('post_type', 'process')->get();
-            $blog_posts = Process::where('post_type', 'blog')->get();
-
-            $response = new \Illuminate\Http\Response(view('taxilanding.home', [
-                'col' => $colCounter[count($plans)-1],
-                'plans' => $plans,
-                'availableLanguages' => $availableLanguages,
-                'locale' => $locale,
-                'pages' => Pages::where('showAsLink', 1)->get(),
-                'featured_vendors'=>Restorant::where('active',1)->where('is_featured',0)->get()->shuffle(),
-                'features' => $features,
-                'faqs' =>  Process::where('post_type', 'faq')->get(),
-                'testimonials' => $testimonials,
-                'processes' => $processes,
-                'blog_posts' => $blog_posts
-            ]));
-
-            $response->withCookie(cookie('lang', $locale, 120));
-            App::setLocale(strtolower($locale));
-
-            return $response;
-        }
-    }
-
+    
 
     /**
      * Show stores.
@@ -767,55 +700,18 @@ class FrontEndController extends Controller
             }
         }
 
-        
-
-        
-        $langs=$this->handleLangs();
-
         //Set the cookie of the last entered address
         $lastaddress = Cookie::get('lastaddress');
         $response = new \Illuminate\Http\Response(view('welcome', [
             'sections' => $sections,
             'lastaddress'=> $lastaddress,
             'banners' => $banners,
-            'availableLanguages'=>$langs[0],
-            'locale'=>$langs[1]
         ]));
         if (\Request::has('location') && strlen(\Request::input('location')) > 1) {
             $response->withCookie(cookie('lastaddress', \Request::input('location'), 120));
         }
-        $response->withCookie(cookie('lang', $langs[1], 120));
 
         return $response;
-    }
-
-    private function handleLangs(){
-
-        $availableLanguagesENV = config('settings.front_languages');
-        $exploded = explode(',', $availableLanguagesENV);
-        $availableLanguages = [];
-        for ($i = 0; $i < count($exploded); $i += 2) {
-            $availableLanguages[$exploded[$i]] = $exploded[$i + 1];
-        }
-
-        $locale = Cookie::get('lang') ? Cookie::get('lang') : config('settings.app_locale');
-        $route = Route::current();
-        $name = Route::currentRouteName();
-        $query = 'lang.';
-        if (substr($name, 0, strlen($query)) === $query) {
-            //this is language route
-            $exploded = explode('.', $name);
-            $lang = strtoupper($exploded[1]);
-            $locale = $lang;
-
-
-            if($locale!="android-chrome-256x256.png"){
-                App::setLocale(strtolower($locale));
-                session(['applocale_change' => strtolower($locale)]);
-            }
-        }
-      
-        return [$availableLanguages,$locale];
     }
 
     private function withinArea($point, $polygon, $n)
@@ -842,25 +738,12 @@ class FrontEndController extends Controller
         return $oddNodes;
     }
 
-    public function onboarding(){
-        $plans = config('settings.forceUserToPay',false)?Plans::where('id','!=',intval(config('settings.free_pricing_id')))->get()->toArray():Plans::get()->toArray();
-        $colCounter = [12, 6, 4, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4];
-        return view('taxilanding.onboarding',[
-            'faqs' =>  Process::where('post_type', 'faq')->get(),
-            'col'=>$colCounter[count($plans)],
-            'plans'=>$plans,
-        ]);
-    }
-
     public function restorant($alias)
     {
        
-
+        // dd('ok');
         //Do we have impressum app
         $doWeHaveImpressumApp=Module::has('impressum');
-       
-
-        
 
 
         $subDomain = $this->getSubDomain();
@@ -868,18 +751,6 @@ class FrontEndController extends Controller
             return redirect()->route('restorant', $subDomain);
         }
         $restorant = Restorant::whereRaw('REPLACE(subdomain, "-", "") = ?', [str_replace("-","",$alias)])->first();
-
-        $doWeHaveOrderAfterHours=Module::has('orderdatetime')&&$restorant->getConfig('order_date_time_enable',false);
-
-        //Template switcher
-        $menuTemplate=config('settings.front_end_template','defaulttemplate');
-        if(Module::has('themeswitcher')){
-            $vendorTemplate=$restorant->getConfig('menu_template',$menuTemplate);
-            //dd($vendorTemplate);    
-            config(['settings.front_end_template' =>$vendorTemplate ]);
-            $menuTemplate=$vendorTemplate;
-        }
-        
 
         //Do we have google translate app
         $doWeHaveGoogleTranslateApp=Module::has('googletranslate')&&$restorant->getConfig('gt_enable',false)=="true";
@@ -953,7 +824,7 @@ class FrontEndController extends Controller
            $formatter->setPattern(config('settings.datetime_workinghours_display_format_new'));
            $formatter->setTimeZone($tz);
 
-         
+           $menuTemplate=config('settings.front_end_template','defaulttemplate');
            $viewFile='restorants.show';
            if($menuTemplate!='defaulttemplate'){
             $viewFile=config('settings.front_end_template','defaulttemplate')."::show";
@@ -963,7 +834,7 @@ class FrontEndController extends Controller
            $wh=$businessHours->forWeek();
            
 
-           $canDoOrdering=$canDoOrdering&&($businessHours->isOpen()||$doWeHaveOrderAfterHours);
+           $canDoOrdering=$canDoOrdering&&$businessHours->isOpen();
            if ($restorant->getConfig('disable_ordering', false)){
             $canDoOrdering=false;
            }
@@ -987,9 +858,8 @@ class FrontEndController extends Controller
                 'restorant' => $restorant,
                 'openingTime' => $openingTime,
                 'closingTime' => $closingTime,
-                'doWeHaveOrderAfterHours'=> $doWeHaveOrderAfterHours,
                 'usernames' => $usernames,
-                'canDoOrdering'=>$canDoOrdering,
+                'canDoOrdering'=>$canDoOrdering&&$businessHours->isOpen(),
                 'currentLanguage'=>$currentEnvLanguage,
                 'showGoogleTranslate'=>$doWeHaveGoogleTranslateApp,
                 'showAllGTLanguages'=>$restorant->getConfig('gt_all',true),
@@ -998,7 +868,7 @@ class FrontEndController extends Controller
                 'hasGuestOrders'=>count($previousOrderArray) > 0,
                 'fields'=>[['class'=>'col-12', 'classselect'=>'noselecttwo', 'ftype'=>'select', 'name'=>'Table', 'id'=>'table_id', 'placeholder'=>'Select table', 'data'=>$tablesData, 'required'=>true]],
            ];
-    
+           
 
            $response = new \Illuminate\Http\Response(view($viewFile,$viewData));
 

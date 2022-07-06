@@ -30,8 +30,6 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Akaunting\Module\Facade as Module;
-use App\Events\NewVendor;
-use Illuminate\Support\Facades\Session;
 use Image;
 use Maatwebsite\Excel\Facades\Excel;
 use Spatie\Permission\Models\Role;
@@ -59,37 +57,20 @@ class RestorantController extends Controller
      */
     public function index(Restorant $restaurants)
     {
-        
         if (auth()->user()->hasRole('admin')) {
-            return view('restorants.index', [
-                'hasCloner'=>Module::has('cloner'),
-                'restorants' => $restaurants->orderBy('id', 'desc')->paginate(10)]);
-        } if (auth()->user()->hasRole('manager')) {
-            return view('restorants.index', [
-                'hasCloner'=>Module::has('cloner'),
-                'restorants' => $restaurants->whereIn('id',auth()->user()->getManagerVendors())->orderBy('id', 'desc')->paginate(10)]);
+            return view('restorants.index', ['restorants' => $restaurants->orderBy('id', 'desc')->paginate(10)]);
         } else {
             return redirect()->route('orders.index')->withStatus(__('No Access'));
         }
     }
 
-    public function stopImpersonate()
+    public function loginas(Restorant $restaurant)
     {
-        
-        Auth::user()->stopImpersonating();
-
-        return redirect()->route('home');
-    }
-
-    public function loginas($restaurantid)
-    {
-        $restaurant=Restorant::findOrFail($restaurantid);
-        if ($this->verifyAccess($restaurant)) {
+        if (auth()->user()->hasRole('admin')) {
             //Login as owner
-            Session::put('impersonate', $restaurant->user->id);
-            return redirect()->route('home');
-            //Auth::login($restaurant->user, true);
-           // return $this->edit($restaurant);
+            Auth::login($restaurant->user, true);
+
+            return $this->edit($restaurant);
         } else {
             return redirect()->route('orders.index')->withStatus(__('No Access'));
         }
@@ -102,7 +83,7 @@ class RestorantController extends Controller
      */
     public function create()
     {
-        if (auth()->user()->hasRole(['admin','manager'])) {
+        if (auth()->user()->hasRole('admin')) {
             $title=Module::has('cloner')&&isset($_GET['cloneWith'])?__('Clone Restaurant')." ".(Restorant::findOrFail($_GET['cloneWith'])->name):__('Add Restaurant');
             return view('restorants.create',['title'=>$title]);
         } else {
@@ -185,9 +166,6 @@ class RestorantController extends Controller
         //Send email to the user/owner
         $owner->notify(new RestaurantCreated($generatedPassword, $restaurant, $owner));
 
-        //Fire event
-        NewVendor::dispatch($owner,$restaurant);
-
         if($request->has('cloneWith')){
             return redirect()->route('cloner.index',['newid'=>$restaurant->id,'oldid'=>$request->cloneWith]);
         }else{
@@ -203,24 +181,18 @@ class RestorantController extends Controller
      * @param  \App\Restorant  $restaurant
      * @return \Illuminate\Http\Response
      */
-    public function show($restaurantid)
+    public function show(Restorant $restaurant)
     {
         //
     }
 
-    private function verifyAccess($restaurant){
-        return auth()->user()->id == $restaurant->user_id || auth()->user()->hasRole('admin') || (auth()->user()->hasRole('manager') && in_array($restaurant->id,auth()->user()->getManagerVendors()));
-    }
 
-
-    public function addnewshift($restaurantid)
-    {
-        $restaurant=Restorant::findOrFail($restaurantid);
-        if ($this->verifyAccess($restaurant)) {
+    public function addnewshift(Restorant $restaurant){
+        if (auth()->user()->id == $restaurant->user_id || auth()->user()->hasRole('admin')) {
             $hours = new Hours();
             $hours->restorant_id = $restaurant->id;
             $hours->save();
-            return redirect()->route('admin.restaurants.edit', $restaurant->id)->withStatus(__('New shift added!'));
+            return redirect()->route('admin.restaurants.edit', ['restaurant' => $restaurant->id])->withStatus(__('New shift added!'));
         }else{
             abort(404);
         }
@@ -232,9 +204,8 @@ class RestorantController extends Controller
      * @param  \App\Restorant  $restaurant
      * @return \Illuminate\Http\Response
      */
-    public function edit($restaurantid)
+    public function edit(Restorant $restaurant)
     {
-        $restaurant=Restorant::findOrFail($restaurantid);
 
         //Days of the week
         $timestamp = strtotime('next Monday');
@@ -319,14 +290,14 @@ class RestorantController extends Controller
             $shifts[$shiftId]=$workingHours;
         }
 
-        if ($this->verifyAccess($restaurant)) {
+        if (auth()->user()->id == $restaurant->user_id || auth()->user()->hasRole('admin')) {
             $cities=[];
             try {
                 $cities=City::get()->pluck('name', 'id');
             } catch (\Throwable $th) {
             }
             return view('restorants.edit', [
-                'hasCloner'=>Module::has('cloner')&& auth()->user()->hasRole(['admin','manager']),
+                'hasCloner'=>Module::has('cloner')&& auth()->user()->hasRole('admin'),
                 'restorant' => $restaurant,
                 'shifts'=>$shifts,
                 'days'=>$days,
@@ -347,7 +318,7 @@ class RestorantController extends Controller
          if($request->has('custom')){
             $restaurant->setMultipleConfig($request->custom);
         }
-        return redirect()->route('admin.restaurants.edit', $restaurant->id)->withStatus(__('Restaurant successfully updated.'));
+        return redirect()->route('admin.restaurants.edit', ['restaurant' => $restaurant->id])->withStatus(__('Restaurant successfully updated.'));
     }
 
     /**
@@ -357,9 +328,8 @@ class RestorantController extends Controller
      * @param  \App\Restorant  $restaurant
      * @return \Illuminate\Http\Response
      */
-    public function update(Request $request, $restaurantid)
+    public function update(Request $request, Restorant $restaurant)
     {
-        $restaurant = Restorant::findOrFail($restaurantid);
         $restaurant->name = strip_tags($request->name);
         $restaurant->address = strip_tags($request->address);
         $restaurant->phone = strip_tags($request->phone);
@@ -384,7 +354,6 @@ class RestorantController extends Controller
         
         $restaurant->can_pickup = $request->can_pickup == 'true' ? 1 : 0;
         $restaurant->can_deliver = $request->can_deliver == 'true' ? 1 : 0;
-        $restaurant->can_dinein = $request->can_dinein == 'true' ? 1 : 0;
         if($request->has('self_deliver')){
             $restaurant->self_deliver = $request->self_deliver == 'true' ? 1 : 0;
         }
@@ -394,7 +363,6 @@ class RestorantController extends Controller
             $restaurant->setConfig('disable_callwaiter',$request->disable_callwaiter == 'true' ? 1 : 0);
         }
 
-        
         if($request->has('disable_ordering')){
             $restaurant->setConfig('disable_ordering',$request->disable_ordering == 'true' ? 1 : 0);
         }
@@ -487,9 +455,9 @@ class RestorantController extends Controller
         }
 
         if (auth()->user()->hasRole('admin')) {
-            return redirect()->route('admin.restaurants.edit', $restaurant->id)->withStatus(__('Restaurant successfully updated.'));
+            return redirect()->route('admin.restaurants.edit', ['restaurant' => $restaurant->id])->withStatus(__('Restaurant successfully updated.'));
         } else {
-            return redirect()->route('admin.restaurants.edit', $restaurant->id)->withStatus(__('Restaurant successfully updated.'));
+            return redirect()->route('admin.restaurants.edit', ['restaurant' => $restaurant->id])->withStatus(__('Restaurant successfully updated.'));
         }
     }
 
@@ -499,9 +467,8 @@ class RestorantController extends Controller
      * @param  \App\Restorant  $restaurant
      * @return \Illuminate\Http\Response
      */
-    public function destroy($restaurantid)
+    public function destroy(Restorant $restaurant)
     {
-        $restaurant=Restorant::findOrFail($restaurantid);
         if (! auth()->user()->hasRole('admin')) {
             dd('Not allowed');
         }
@@ -512,9 +479,8 @@ class RestorantController extends Controller
         return redirect()->route('admin.restaurants.index')->withStatus(__('Restaurant successfully deactivated.'));
     }
 
-    public function remove($restaurantid)
+    public function remove(Restorant $restaurant)
     {
-        $restaurant=Restorant::findOrFail($restaurantid);
         if (! auth()->user()->hasRole('admin')) {
             dd('Not allowed');
         }
@@ -580,9 +546,8 @@ class RestorantController extends Controller
         ]);
     }
 
-    public function getLocation($restaurantid)
+    public function getLocation(Restorant $restaurant)
     {
-$restaurant=Restorant::findOrFail($restaurantid);
         return response()->json([
             'data' => [
                 'lat' => $restaurant->lat,
@@ -603,13 +568,18 @@ $restaurant=Restorant::findOrFail($restaurantid);
     }
 
     public function workingHoursremove(Hours $hours){
-        if (!$this->verifyAccess($hours->restorant)) {
-            abort(404);
+        if (!auth()->user()->hasRole('admin')) {
+            if (auth()->user()->hasRole('owner')&&$hours->restorant->user->id==auth()->user()->id) {
+                //ok, owner
+            }else{
+                abort(404);
+            }
+           
         }
 
 
         $hours->delete();
-        return redirect()->route('admin.restaurants.edit',  $hours->restorant_id)->withStatus(__('Working hours successfully updated!'));
+        return redirect()->route('admin.restaurants.edit', ['restaurant' => $hours->restorant_id])->withStatus(__('Working hours successfully updated!'));
     }
 
     public function workingHours(Request $request)
@@ -634,14 +604,13 @@ $restaurant=Restorant::findOrFail($restaurantid);
         $hours->{'6_to'} = $request->{'6_to'.$shift} ?? null;
         $hours->update();
 
-        return redirect()->route('admin.restaurants.edit',  $request->rid)->withStatus(__('Working hours successfully updated!'));
+        return redirect()->route('admin.restaurants.edit', ['restaurant' => $request->rid])->withStatus(__('Working hours successfully updated!'));
     }
 
     public function showRegisterRestaurant()
     {
         return view('restorants.register');
     }
-    
 
     public function storeRegisterRestaurant(Request $request)
     {
@@ -716,9 +685,6 @@ $restaurant=Restorant::findOrFail($restaurantid);
         $restaurant->setConfig('disable_callwaiter', 0);
         $restaurant->setConfig('disable_ordering', 0);
 
-         //Fire event
-         NewVendor::dispatch($owner,$restaurant);
-
         if (config('app.isqrsaas') || config('settings.directly_approve_resstaurant')) {
             //QR SaaS - or directly approve
             $this->makeRestaurantActive($restaurant);
@@ -761,9 +727,8 @@ $restaurant=Restorant::findOrFail($restaurantid);
         }
     }
 
-    public function activateRestaurant($restaurantid)
+    public function activateRestaurant(Restorant $restaurant)
     {
-        $restaurant=Restorant::findOrFail($restaurantid);
         $this->makeRestaurantActive($restaurant);
 
         return redirect()->route('admin.restaurants.index')->withStatus(__('Restaurant successfully activated.'));
@@ -771,15 +736,8 @@ $restaurant=Restorant::findOrFail($restaurantid);
 
     public function restaurantslocations()
     {
-        if (!auth()->user()->hasRole('admin')) {
-            if(auth()->user()->hasRole('owner')&&in_array("drivers", config('global.modules',[]))){
-                return response()->json([
-                    'restaurants'=> [auth()->user()->restorant],
-                ]);
-            }else{
-                abort(404,'Not allowed');
-            }
-            
+        if (! auth()->user()->hasRole('admin')) {
+            abort(404,'Not allowed');
         }
 
         $toRespond = [
@@ -818,19 +776,18 @@ $restaurant=Restorant::findOrFail($restaurantid);
         }
     }
 
-        public function shareMenu()
-        {
-            $this->authChecker();
+    public function shareMenu()
+    {
+        $this->authChecker();
 
-            if (config('settings.wildcard_domain_ready')) {
-                //$url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] ? 'https://' : 'http://').auth()->user()->restorant->subdomain.'.'.str_replace('www.', '', $_SERVER['HTTP_HOST']);
-                $url = str_replace('://', '://'.auth()->user()->restorant->subdomain.".", config('app.url',''));
-            } else {
-                $url = route('vendor', auth()->user()->restorant->subdomain);
-            }
-
-            return view('restorants.share', ['url' => $url, 'name'=>auth()->user()->restorant->name]);
+        if (config('settings.wildcard_domain_ready')) {
+            $url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] ? 'https://' : 'http://').auth()->user()->restorant->subdomain.'.'.str_replace('www.', '', $_SERVER['HTTP_HOST']);
+        } else {
+            $url = route('vendor', auth()->user()->restorant->subdomain);
         }
+
+        return view('restorants.share', ['url' => $url, 'name'=>auth()->user()->restorant->name]);
+    }
 
     public function downloadQR()
     {
@@ -838,9 +795,7 @@ $restaurant=Restorant::findOrFail($restaurantid);
 
         if (config('settings.wildcard_domain_ready')) {
             $vendorURL = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] ? 'https://' : 'http://').auth()->user()->restorant->subdomain.'.'.str_replace('www.', '', $_SERVER['HTTP_HOST']);
-        }else if(strlen(auth()->user()->restorant->getConfig('domain'))>3){
-            $vendorURL = "https://".auth()->user()->restorant->getConfig('domain');
-        }else {
+        } else {
             $vendorURL = route('vendor', auth()->user()->restorant->subdomain);
         }
 
@@ -857,21 +812,13 @@ $restaurant=Restorant::findOrFail($restaurantid);
             
         }
         
-
-        if(Module::has('qrgen')){
-            //With QR Module
-            return redirect((route('qrgen.gen',['name'=>$filename]))."?data=".$vendorURL);
-        }else{
-            //Without QR module
-            $url = 'https://api.qrserver.com/v1/create-qr-code/?size=512x512&format=png&data='.$vendorURL;
+        $url = 'https://api.qrserver.com/v1/create-qr-code/?size=512x512&format=png&data='.$vendorURL;
+        //
        
-            $tempImage = tempnam(sys_get_temp_dir(), $filename);
-            @copy($url, $tempImage);
+        $tempImage = tempnam(sys_get_temp_dir(), $filename);
+        @copy($url, $tempImage);
 
-            return response()->download($tempImage, $filename,array('Content-Type:image/png'));
-        }
-        
-        
+        return response()->download($tempImage, $filename,array('Content-Type:image/png'));
     }
 
     /**

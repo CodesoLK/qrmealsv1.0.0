@@ -137,6 +137,7 @@ class ItemsController extends Controller
         $item->description = strip_tags($request->item_description);
         $item->price = strip_tags($request->item_price);
         $item->category_id = strip_tags($request->category_id);
+        $item->video_link = $request->video_link;
         $defVat=0;
         $resto=$this->getRestaurant();
         if($resto){
@@ -183,9 +184,6 @@ class ItemsController extends Controller
         //if item belongs to owner restorant menu return view
         if (auth()->user()->hasRole('owner') && $item->category->restorant->id == auth()->user()->restorant->id || auth()->user()->hasRole('admin')) {
             
-            //Change currency
-            ConfChanger::switchCurrency($item->category->restorant);
-
             $extraViews=[];
             foreach (Module::all() as $key => $module) {
                 if(is_array($module->get('menuview'))){
@@ -221,16 +219,16 @@ class ItemsController extends Controller
      */
     public function update(Request $request, Items $item)
     {
+        // dd("O");
         $makeVariantsRecreate=false;
         $item->name = strip_tags($request->item_name);
         $item->description = strip_tags($request->item_description);
         $item->category_id = $request->category_id;
+        $item->video_link = $request->video_link;
         if($item->price!=strip_tags($request->item_price)){
             $makeVariantsRecreate=true;
         }
         $item->price = strip_tags($request->item_price);
-        $item->discounted_price = strip_tags($request->discounted_price);
-
         if (isset($request->vat)) {
             $item->vat = $request->vat;
         }
@@ -274,19 +272,13 @@ class ItemsController extends Controller
         }
 
         if ($request->hasFile('item_image')) {
-            $request->validate([
-                'item_image' => ['dimensions:max_width=2000'],
-            ]);
             if ($request->hasFile('item_image')) {
-                $large_image=['name'=>'large'];
-                if(config('settings.do_large_image_resize',false)){
-                    $large_image=['name'=>'large', 'w'=>590, 'h'=>400];
-                }
                 $item->image = $this->saveImageVersions(
                     $this->imagePath,
                     $request->item_image,
                     [
-                        $large_image,
+                        ['name'=>'large'],
+                        //['name'=>'thumbnail','w'=>300,'h'=>300],
                         ['name'=>'medium', 'w'=>295, 'h'=>200],
                         ['name'=>'thumbnail', 'w'=>200, 'h'=>200],
                     ]
