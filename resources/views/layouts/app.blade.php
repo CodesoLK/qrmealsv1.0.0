@@ -136,6 +136,9 @@
          <!-- Cart custom sidemenu -->
         <script src="{{ asset('custom') }}/js/cartSideMenu.js"></script>
 
+        {{-- Flyer Template Part --}}
+        <script src="https://code.jquery.com/ui/1.13.1/jquery-ui.min.js" integrity="sha256-eTyxS0rkjpLEo16uXTS0uVCS4815lc40K2iVpWDvdSY=" crossorigin="anonymous"></script>
+
 
         <script>
             var ONESIGNAL_APP_ID = "{{ config('settings.onesignal_app_id') }}";
