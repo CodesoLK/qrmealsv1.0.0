@@ -1,4 +1,19 @@
 <ul class="navbar-nav">
+    {{-- Flyer Template Changes Part --}}
+    @if(auth()->user()->hasRole('admin'))
+    <li class="nav-item">
+        <a class="nav-link" href="{{ route('flyer.index') }}">
+            <i class="ni ni-tv-2 text-primary"></i> {{ __('Template Designer') }}
+        </a>
+    </li>
+    @else
+    <li class="nav-item">
+        <a class="nav-link" href="{{ route('menu-designer.index') }}">
+            <i class="ni ni-tv-2 text-primary"></i> {{ __('Menu Designer') }}
+        </a>
+    </li>
+    @endif
+
     @if(config('app.ordering'))
         <li class="nav-item">
             <a class="nav-link" href="{{ route('home') }}">
